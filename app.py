@@ -135,5 +135,73 @@ def add_transaction():
     except Exception as e:
         return jsonify({'success': False, 'message': 'An error occurred while processing the transaction'}), 500
 
+@app.route('/api/transactions/chart_data')
+@login_required
+def get_chart_data():
+    try:
+        # Get all transactions for the current user
+        user_transactions = transactions_db.search(Transaction_table.user_id == current_user.id)
+        
+        # Sort transactions by date
+        user_transactions.sort(key=lambda x: x['date'])
+        
+        if not user_transactions:
+            return jsonify({
+                'labels': [],
+                'data': [],
+                'cumulative_data': []
+            })
+        
+        # Calculate cumulative balance over time
+        cumulative_balance = 0
+        chart_data = []
+        labels = []
+        
+        for transaction in user_transactions:
+            date = transaction['date']
+            amount = transaction['amount']
+            direction = transaction['direction']
+            
+            # Calculate cumulative balance
+            if direction == 'deposit':
+                cumulative_balance += amount
+            elif direction == 'withdraw':
+                cumulative_balance -= amount
+            
+            labels.append(date)
+            chart_data.append(cumulative_balance)
+        
+        return jsonify({
+            'labels': labels,
+            'data': chart_data,
+            'cumulative_data': chart_data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': 'Failed to fetch chart data'}), 500
+
+@app.route('/api/balance')
+@login_required
+def get_current_balance():
+    try:
+        # Get all transactions for the current user
+        user_transactions = transactions_db.search(Transaction_table.user_id == current_user.id)
+        
+        # Calculate current balance
+        balance = 0
+        for transaction in user_transactions:
+            if transaction['direction'] == 'deposit':
+                balance += transaction['amount']
+            elif transaction['direction'] == 'withdraw':
+                balance -= transaction['amount']
+        
+        return jsonify({
+            'balance': balance,
+            'transaction_count': len(user_transactions)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': 'Failed to fetch balance'}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)

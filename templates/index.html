@@ -56,76 +56,19 @@
               </div>
             </div>
             
-            <!-- Chart Placeholder -->
-            <div class="bg-base-200 rounded-lg p-8 min-h-[400px] relative">
-              <!-- Y-axis labels -->
-              <div class="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-base-content/60 pr-4">
-                <span>$34k</span>
-                <span>$26k</span>
-                <span>$17k</span>
-                <span>$9k</span>
-                <span>$0k</span>
+            <!-- Chart Container -->
+            <div class="bg-base-100 rounded-lg p-6 min-h-[400px] relative">
+              <canvas id="financialChart" class="w-full h-[400px]"></canvas>
+              <div id="chartLoadingMsg" class="absolute inset-0 flex items-center justify-center text-base-content/60">
+                <div class="loading loading-spinner loading-lg"></div>
+                <span class="ml-4">Loading chart data...</span>
               </div>
-              
-              <!-- Chart area with simulated data points -->
-              <div class="ml-8 h-full relative">
-                <!-- Simulated chart dots -->
-                <div class="absolute inset-0 flex items-end justify-between px-4">
-                  <div class="flex flex-col items-center space-y-2">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-4">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-6">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-8">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-12">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-16">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-20">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-12">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-8">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-4">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-2">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
-                  <div class="flex flex-col items-center space-y-1">
-                    <div class="w-2 h-2 bg-primary rounded-full"></div>
-                  </div>
+              <div id="chartEmptyMsg" class="absolute inset-0 flex items-center justify-center text-base-content/60 hidden">
+                <div class="text-center">
+                  <i class="bi bi-bar-chart text-4xl mb-4"></i>
+                  <p class="text-lg">No transaction data yet</p>
+                  <p class="text-sm">Add your first deposit to see your financial growth</p>
                 </div>
-              </div>
-              
-              <!-- X-axis labels -->
-              <div class="flex justify-between text-xs text-base-content/60 mt-4 ml-8">
-                <span>Jan</span>
-                <span>Feb</span>
-                <span>Mar</span>
-                <span>Apr</span>
-                <span>May</span>
-                <span>Jun</span>
-                <span>Jul</span>
-                <span>Aug</span>
-                <span>Sep</span>
-                <span>Oct</span>
-                <span>Nov</span>
-                <span>Dec</span>
               </div>
             </div>
           </div>
@@ -141,12 +84,11 @@
             <h3 class="text-sm font-medium text-base-content/70">Current Balance</h3>
             <div class="flex items-baseline space-x-1">
               <span class="text-sm text-base-content/70">$</span>
-              <span class="text-3xl font-bold text-base-content">22,518.114</span>
+              <span id="currentBalance" class="text-3xl font-bold text-base-content">0.00</span>
             </div>
             <div class="flex items-center space-x-1 text-sm">
-              <i class="bi bi-arrow-up text-success"></i>
-              <span class="text-success">+$882.671</span>
-              <span class="text-base-content/70">from last month</span>
+              <i class="bi bi-wallet2 text-info"></i>
+              <span id="transactionCount" class="text-base-content/70">0 transactions</span>
             </div>
           </div>
         </div>
@@ -469,8 +411,9 @@ async function handleTransactionSubmit(event) {
     if (result.success) {
       alert(result.message);
       document.getElementById('transactionModal').close();
-      // You might want to refresh the page or update the balance display here
-      // location.reload(); // Uncomment if you want to refresh the page
+      // Refresh the chart and balance with new data
+      loadFinancialChart();
+      updateBalance();
     } else {
       alert('Error: ' + result.message);
     }
@@ -483,12 +426,200 @@ async function handleTransactionSubmit(event) {
   }
 }
 
+// Chart.js instance variable
+let financialChart = null;
+
+// Load and display financial chart
+async function loadFinancialChart() {
+  const chartCanvas = document.getElementById('financialChart');
+  const loadingMsg = document.getElementById('chartLoadingMsg');
+  const emptyMsg = document.getElementById('chartEmptyMsg');
+  
+  try {
+    // Show loading state
+    loadingMsg.style.display = 'flex';
+    emptyMsg.style.display = 'none';
+    chartCanvas.style.display = 'block';
+    
+    // Fetch chart data from backend
+    const response = await fetch('/api/transactions/chart_data');
+    if (!response.ok) {
+      throw new Error('Failed to fetch chart data');
+    }
+    
+    const chartData = await response.json();
+    
+    // Hide loading message
+    loadingMsg.style.display = 'none';
+    
+    // Check if we have data
+    if (!chartData.labels || chartData.labels.length === 0) {
+      chartCanvas.style.display = 'none';
+      emptyMsg.style.display = 'flex';
+      return;
+    }
+    
+    // Destroy existing chart if it exists
+    if (financialChart) {
+      financialChart.destroy();
+    }
+    
+    // Format dates for display
+    const formattedLabels = chartData.labels.map(date => {
+      const d = new Date(date);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
+    
+    // Create the chart
+    const ctx = chartCanvas.getContext('2d');
+    financialChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: formattedLabels,
+        datasets: [{
+          label: 'Account Balance',
+          data: chartData.data,
+          fill: true,
+          backgroundColor: 'rgba(75, 192, 192, 0.1)',
+          borderColor: 'rgb(75, 192, 192)',
+          borderWidth: 3,
+          tension: 0.2,
+          pointBackgroundColor: 'rgb(75, 192, 192)',
+          pointBorderColor: 'rgb(255, 255, 255)',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          intersect: false,
+          mode: 'index'
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              font: {
+                size: 14
+              },
+              padding: 20
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            titleFont: {
+              size: 14
+            },
+            bodyFont: {
+              size: 13
+            },
+            callbacks: {
+              label: function(context) {
+                return 'Balance: $' + context.parsed.y.toFixed(2);
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            display: true,
+            title: {
+              display: true,
+              text: 'Date',
+              font: {
+                size: 14,
+                weight: 'bold'
+              }
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.1)'
+            }
+          },
+          y: {
+            display: true,
+            title: {
+              display: true,
+              text: 'Total Value ($)',
+              font: {
+                size: 14,
+                weight: 'bold'
+              }
+            },
+            beginAtZero: true,
+            grid: {
+              color: 'rgba(0, 0, 0, 0.1)'
+            },
+            ticks: {
+              callback: function(value) {
+                return '$' + value.toFixed(0);
+              }
+            }
+          }
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error loading chart:', error);
+    loadingMsg.style.display = 'none';
+    chartCanvas.style.display = 'none';
+    
+    // Show error message
+    const errorMsg = document.createElement('div');
+    errorMsg.className = 'absolute inset-0 flex items-center justify-center text-base-content/60';
+    errorMsg.innerHTML = `
+      <div class="text-center">
+        <i class="bi bi-exclamation-triangle text-4xl mb-4 text-warning"></i>
+        <p class="text-lg">Failed to load chart</p>
+        <p class="text-sm">Please refresh the page to try again</p>
+      </div>
+    `;
+    document.querySelector('.bg-base-100.rounded-lg.p-6').appendChild(errorMsg);
+  }
+}
+
+// Load and update current balance
+async function updateBalance() {
+  try {
+    const response = await fetch('/api/balance');
+    if (!response.ok) {
+      throw new Error('Failed to fetch balance');
+    }
+    
+    const balanceData = await response.json();
+    
+    // Update balance display
+    const balanceElement = document.getElementById('currentBalance');
+    const transactionCountElement = document.getElementById('transactionCount');
+    
+    if (balanceElement) {
+      balanceElement.textContent = balanceData.balance.toFixed(2);
+    }
+    
+    if (transactionCountElement) {
+      const count = balanceData.transaction_count;
+      transactionCountElement.textContent = `${count} transaction${count !== 1 ? 's' : ''}`;
+    }
+    
+  } catch (error) {
+    console.error('Error updating balance:', error);
+  }
+}
+
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', function() {
   const amountInput = document.getElementById('amountInput');
   const transactionForm = document.getElementById('transactionForm');
   const depositLabel = document.getElementById('depositLabel');
   const withdrawLabel = document.getElementById('withdrawLabel');
+  
+  // Load the financial chart and balance
+  loadFinancialChart();
+  updateBalance();
   
   // Add currency formatting to amount input
   amountInput.addEventListener('input', function() {

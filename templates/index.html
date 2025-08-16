@@ -19,11 +19,11 @@
           <i class="bi bi-arrow-up-right"></i>
           Trade
         </button>
-        <button class="btn btn-success">
+        <button class="btn btn-success" onclick="openTransactionModal('deposit')">
           <i class="bi bi-plus-circle"></i>
           Deposit
         </button>
-        <button class="btn btn-warning">
+        <button class="btn btn-warning" onclick="openTransactionModal('withdraw')">
           <i class="bi bi-dash-circle"></i>
           Withdrawal
         </button>
@@ -256,6 +256,74 @@
 
   </div>
 </div>
+
+<!-- Transaction Modal -->
+<dialog id="transactionModal" class="modal">
+  <div class="modal-box w-11/12 max-w-md">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+    </form>
+    
+    <h3 class="font-bold text-lg mb-6">Add Transaction</h3>
+    
+    <form id="transactionForm" class="space-y-4">
+      <!-- Direction Tabs -->
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Direction</span>
+        </label>
+        <div class="tabs tabs-boxed">
+          <input type="radio" name="direction" id="depositTab" value="deposit" class="tab-radio" hidden>
+          <label for="depositTab" class="tab tab-active" id="depositLabel">
+            <i class="bi bi-plus-circle mr-2"></i>Deposit
+          </label>
+          
+          <input type="radio" name="direction" id="withdrawTab" value="withdraw" class="tab-radio" hidden>
+          <label for="withdrawTab" class="tab" id="withdrawLabel">
+            <i class="bi bi-dash-circle mr-2"></i>Withdraw
+          </label>
+        </div>
+      </div>
+
+      <!-- Amount Input -->
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Amount</span>
+        </label>
+        <label class="input input-bordered flex items-center gap-2">
+          <span class="text-base-content/70">$</span>
+          <input type="text" id="amountInput" name="amount" placeholder="0.00" class="grow" required>
+        </label>
+      </div>
+
+      <!-- Description -->
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Description</span>
+        </label>
+        <textarea name="description" class="textarea textarea-bordered" placeholder="Enter transaction description (optional)" rows="3"></textarea>
+      </div>
+
+      <!-- Date -->
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Date</span>
+        </label>
+        <input type="date" name="date" id="dateInput" class="input input-bordered" required>
+      </div>
+
+      <!-- Submit Button -->
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('transactionModal').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Add Deposit</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
 {% endblock %}
 
 {% block footer %}
@@ -272,4 +340,172 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Get today's date in YYYY-MM-DD format
+function getTodayDate() {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+}
+
+// Format currency input
+function formatCurrency(input) {
+  let value = input.value.replace(/[^\d.]/g, '');
+  
+  // Handle multiple decimal points
+  const parts = value.split('.');
+  if (parts.length > 2) {
+    value = parts[0] + '.' + parts.slice(1).join('');
+  }
+  
+  // Limit to 2 decimal places
+  if (parts[1] && parts[1].length > 2) {
+    value = parts[0] + '.' + parts[1].substring(0, 2);
+  }
+  
+  input.value = value;
+}
+
+// Open transaction modal with specified direction
+function openTransactionModal(direction) {
+  const modal = document.getElementById('transactionModal');
+  const depositTab = document.getElementById('depositTab');
+  const withdrawTab = document.getElementById('withdrawTab');
+  const depositLabel = document.getElementById('depositLabel');
+  const withdrawLabel = document.getElementById('withdrawLabel');
+  const submitBtn = document.getElementById('submitBtn');
+  const dateInput = document.getElementById('dateInput');
+  const amountInput = document.getElementById('amountInput');
+  const form = document.getElementById('transactionForm');
+  
+  // Set today's date as default
+  dateInput.value = getTodayDate();
+  
+  // Clear form
+  form.reset();
+  dateInput.value = getTodayDate(); // Reset date after form reset
+  
+  // Set direction based on parameter
+  if (direction === 'deposit') {
+    depositTab.checked = true;
+    depositLabel.classList.add('tab-active');
+    withdrawLabel.classList.remove('tab-active');
+    submitBtn.textContent = 'Add Deposit';
+    submitBtn.className = 'btn btn-success';
+  } else {
+    withdrawTab.checked = true;
+    withdrawLabel.classList.add('tab-active');
+    depositLabel.classList.remove('tab-active');
+    submitBtn.textContent = 'Add Withdrawal';
+    submitBtn.className = 'btn btn-warning';
+  }
+  
+  modal.showModal();
+}
+
+// Handle tab switching
+function switchTab(direction) {
+  const depositTab = document.getElementById('depositTab');
+  const withdrawTab = document.getElementById('withdrawTab');
+  const depositLabel = document.getElementById('depositLabel');
+  const withdrawLabel = document.getElementById('withdrawLabel');
+  const submitBtn = document.getElementById('submitBtn');
+  
+  if (direction === 'deposit') {
+    depositTab.checked = true;
+    depositLabel.classList.add('tab-active');
+    withdrawLabel.classList.remove('tab-active');
+    submitBtn.textContent = 'Add Deposit';
+    submitBtn.className = 'btn btn-success';
+  } else {
+    withdrawTab.checked = true;
+    withdrawLabel.classList.add('tab-active');
+    depositLabel.classList.remove('tab-active');
+    submitBtn.textContent = 'Add Withdrawal';
+    submitBtn.className = 'btn btn-warning';
+  }
+}
+
+// Handle form submission
+async function handleTransactionSubmit(event) {
+  event.preventDefault();
+  
+  const submitBtn = document.getElementById('submitBtn');
+  const originalText = submitBtn.textContent;
+  
+  // Show loading state
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Processing...';
+  
+  const formData = new FormData(event.target);
+  const data = {
+    direction: formData.get('direction'),
+    amount: formData.get('amount'),
+    description: formData.get('description') || '',
+    date: formData.get('date')
+  };
+  
+  // Basic validation
+  if (!data.amount || parseFloat(data.amount) <= 0) {
+    alert('Please enter a valid amount');
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+    return;
+  }
+  
+  try {
+    const response = await fetch('/add_transaction', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(result.message);
+      document.getElementById('transactionModal').close();
+      // You might want to refresh the page or update the balance display here
+      // location.reload(); // Uncomment if you want to refresh the page
+    } else {
+      alert('Error: ' + result.message);
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('An error occurred while processing the transaction');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  const amountInput = document.getElementById('amountInput');
+  const transactionForm = document.getElementById('transactionForm');
+  const depositLabel = document.getElementById('depositLabel');
+  const withdrawLabel = document.getElementById('withdrawLabel');
+  
+  // Add currency formatting to amount input
+  amountInput.addEventListener('input', function() {
+    formatCurrency(this);
+  });
+  
+  // Add form submission handler
+  transactionForm.addEventListener('submit', handleTransactionSubmit);
+  
+  // Add click handlers for tabs
+  depositLabel.addEventListener('click', function() {
+    switchTab('deposit');
+  });
+  
+  withdrawLabel.addEventListener('click', function() {
+    switchTab('withdraw');
+  });
+});
+</script>
 {% endblock %}

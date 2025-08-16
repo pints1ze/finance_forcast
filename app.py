@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from tinydb import TinyDB, Query
@@ -9,7 +9,9 @@ app.config['SECRET_KEY'] = 'your-secret-key-change-this'  # Change this to a sec
 
 # Initialize TinyDB
 db = TinyDB('users.json')
+transactions_db = TinyDB('transactions.json')
 User_table = Query()
+Transaction_table = Query()
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -86,6 +88,52 @@ def register():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
+@app.route('/add_transaction', methods=['POST'])
+@login_required
+def add_transaction():
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data or not all(k in data for k in ('direction', 'amount', 'date')):
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        
+        # Validate amount
+        try:
+            amount = float(data['amount'])
+            if amount <= 0:
+                return jsonify({'success': False, 'message': 'Amount must be greater than 0'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'Invalid amount format'}), 400
+        
+        # Validate direction
+        if data['direction'] not in ['deposit', 'withdraw']:
+            return jsonify({'success': False, 'message': 'Invalid direction'}), 400
+        
+        # Create transaction record
+        transaction_id = len(transactions_db.all()) + 1
+        transaction = {
+            'id': transaction_id,
+            'user_id': current_user.id,
+            'direction': data['direction'],
+            'amount': amount,
+            'description': data.get('description', ''),
+            'date': data['date'],
+            'created_at': None  # You might want to add a timestamp here
+        }
+        
+        # Save transaction
+        transactions_db.insert(transaction)
+        
+        return jsonify({
+            'success': True, 
+            'message': f'{data["direction"].title()} of ${amount:.2f} added successfully!',
+            'transaction': transaction
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': 'An error occurred while processing the transaction'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
